@@ -1,23 +1,43 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
+# Abaikan folder besar tempat npm/yarn/pnpm menyimpan paket
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
-/coverage
-
-# production
+# Build Artifacts
+# Abaikan hasil kompilasi, terutama jika menggunakan TypeScript
+/dist
 /build
+/out
+*.tsbuildinfo
 
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
+# Logs and Diagnostics
+# Abaikan file log, debug, dan laporan diagnostik
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Environment and Credentials (PENTING!)
+# Abaikan file yang berisi rahasia, kunci, atau password
+.env
+.env.local
+.env.*.local
+
+# IDEs and OS Files
+# Abaikan file yang dibuat oleh IDE (misalnya VS Code) atau OS (misalnya macOS)
+.DS_Store
+.idea
+.vscode
+*.iml
+
+# Data and Uploads
+# Jika Anda menyimpan file yang diunggah pengguna atau data sementara
+/uploads
+/temp
+
+# NPM
+# Abaikan cache npm
+.npm
