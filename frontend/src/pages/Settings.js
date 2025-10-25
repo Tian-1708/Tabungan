@@ -6,26 +6,27 @@ import { useNavigate } from 'react-router-dom';
 const Settings = () => {
   const navigate = useNavigate();
   
-  // State untuk Modal dan Penggantian Password
+  // State HANYA untuk Dark Mode
+  const [settings, setSettings] = useState({
+    dark_mode: false,
+  });
+  const [settingsError, setSettingsError] = useState('');
+
+  // State HANYA untuk Change Password Modal
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
-
-  // State untuk Pengaturan Umum (HANYA Dark Mode)
-  const [settings, setSettings] = useState({
-    dark_mode: false,
-  });
-  const [settingsError, setSettingsError] = useState('');
   
-  // 1. Ambil Pengaturan Saat Ini
+  // 1. Ambil Pengaturan Saat Ini (Hanya Dark Mode)
   useEffect(() => {
     const fetchSettings = async () => {
       const token = localStorage.getItem('token');
       if (!token) return navigate('/');
       try {
+        // Endpoint ini HANYA mengambil dark_mode
         const res = await axios.get('http://localhost:5000/api/settings', { headers: { 'x-auth-token': token } });
         setSettings({
           dark_mode: res.data.dark_mode === 1,
@@ -33,23 +34,20 @@ const Settings = () => {
         document.body.classList.toggle('dark-mode', res.data.dark_mode === 1);
         localStorage.setItem('darkMode', res.data.dark_mode === 1);
       } catch (err) {
-        setSettingsError('Failed to load settings.');
-        console.error(err);
+        setSettingsError('Failed to load settings. Make sure your server is running.');
+        console.error("Error loading settings:", err);
       }
     };
     fetchSettings();
   }, [navigate]);
 
-  // 2. Handler Perubahan Pengaturan (misalnya Dark Mode)
+  // 2. Handler Perubahan Pengaturan (Dark Mode)
   const handleSettingChange = async (settingName, value) => {
     const token = localStorage.getItem('token');
     if (!token) return navigate('/');
     
-    // Update state segera (Optimistic UI)
-    setSettings(prev => ({
-        ...prev,
-        [settingName]: value
-    }));
+    // Optimistic UI update
+    setSettings(prev => ({ ...prev, [settingName]: value }));
 
     try {
       await axios.post('http://localhost:5000/api/update-setting', 
@@ -57,20 +55,17 @@ const Settings = () => {
         { headers: { 'x-auth-token': token } }
       );
       
-      // Khusus Dark Mode, terapkan perubahan pada body
+      // Terapkan Dark Mode
       if (settingName === 'dark_mode') {
         document.body.classList.toggle('dark-mode', value);
         localStorage.setItem('darkMode', value);
       }
       setSettingsError('');
     } catch (err) {
-      // Jika error, kembalikan state sebelumnya
-      setSettings(prev => ({
-        ...prev,
-        [settingName]: !value
-      }));
+      // Rollback state jika error
+      setSettings(prev => ({ ...prev, [settingName]: !value }));
       setSettingsError('Failed to update setting.');
-      console.error(err);
+      console.error("Error updating setting:", err);
     }
   };
 
@@ -107,13 +102,14 @@ const Settings = () => {
     }
   };
 
+  // --- BAGIAN INI ADALAH BAGIAN UTAMA YANG SUDAH DIBERSIHKAN (HANYA DARK MODE DAN CHANGE PASSWORD) ---
   return (
     <div className="container mt-4">
       <h2 className="mb-4">Settings</h2>
       
       {settingsError && <Alert variant="danger">{settingsError}</Alert>}
 
-      {/* CARD UMUM */}
+      {/* CARD PENGATURAN UMUM: HANYA DARK MODE */}
       <Card className="mb-4 shadow-sm">
         <Card.Header>General Settings</Card.Header>
         <Card.Body>
@@ -126,19 +122,18 @@ const Settings = () => {
               onChange={(e) => handleSettingChange('dark_mode', e.target.checked)}
             />
           </Form.Group>
-          
-          {/* Hapus semua kode 2FA dan Pertanyaan Keamanan di sini */}
-          
+          {/* SEMUA ELEMEN LAIN SEPERTI NOTIFIKASI SUDAH DIHAPUS DI SINI */}
         </Card.Body>
       </Card>
       
-      {/* CARD KEAMANAN */}
+      {/* CARD KEAMANAN: HANYA CHANGE PASSWORD */}
       <Card className="mb-4 shadow-sm">
         <Card.Header>Account Security</Card.Header>
         <Card.Body>
           <Button variant="outline-primary" onClick={() => setShowPasswordModal(true)}>
             Change Password
           </Button>
+          {/* SEMUA TOMBOL LAIN SEPERTI 2FA/SECURITY QUESTION SUDAH DIHAPUS DI SINI */}
         </Card.Body>
       </Card>
 
