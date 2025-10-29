@@ -1,27 +1,30 @@
+// file: ResetPassword.js
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Form, Button, Card, Alert } from 'react-bootstrap';
 import { FaPiggyBank } from 'react-icons/fa';
-import { Link, useLocation, useNavigate } from 'react-router-dom'; // Import useLocation
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const ResetPassword = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Gunakan useLocation untuk mengakses query params
+  const location = useLocation(); 
   const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
+  // Menggunakan 'otp' untuk menggantikan 'token'
+  const [otp, setOtp] = useState(''); 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  // 1. Ambil Email dan Token dari URL Query Parameters
+  // 1. Ambil Email dari URL Query Parameters
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const urlEmail = params.get('email');
-    const urlToken = params.get('token');
+    // Tidak lagi mencari 'token' karena kita menggunakan OTP
+    // const urlToken = params.get('token'); 
 
     if (urlEmail) setEmail(urlEmail);
-    if (urlToken) setToken(urlToken);
   }, [location.search]);
 
   const handleSubmit = async (e) => {
@@ -32,16 +35,17 @@ const ResetPassword = () => {
     if (newPassword !== confirmPassword) {
       return setError('New password and confirmation do not match.');
     }
-
-    if (!email || !token || !newPassword) {
-        return setError('All fields are required.');
+    // Pastikan OTP dan email diisi
+    if (!email || !otp || !newPassword) {
+        return setError('Email, OTP, and New Password are required.');
     }
 
     try {
       // Memanggil endpoint /api/reset-password di backend
+      // Kirim 'otp' sebagai ganti 'token'
       const res = await axios.post('http://localhost:5000/api/reset-password', {
         email,
-        token,
+        otp, // Mengirim OTP
         newPassword
       });
       
@@ -50,7 +54,7 @@ const ResetPassword = () => {
       setTimeout(() => navigate('/'), 3000); 
 
     } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to reset password. Token may be invalid or expired.');
+      setError(err.response?.data?.msg || 'Failed to reset password. OTP may be invalid or expired.');
       setMessage('');
     }
   };
@@ -60,9 +64,9 @@ const ResetPassword = () => {
       <Card style={{ width: '25rem' }} className="p-4 shadow-lg">
         <div className="text-center mb-4">
           <FaPiggyBank size={50} className="text-primary mb-2" />
-          <h2>SecureSave</h2>
+          <h2>Smart Savings</h2>
         </div>
-        <h4 className="text-center mb-4">Reset Password</h4>
+        <h4 className="text-center mb-4">Reset Password (Step 2)</h4>
         {message && <Alert variant="success">{message}</Alert>}
         {error && <Alert variant="danger">{error}</Alert>}
         
@@ -76,25 +80,24 @@ const ResetPassword = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              readOnly={!!email} // Non-aktifkan jika sudah diisi dari URL
+              readOnly={!!email}
               className={email ? 'bg-light' : ''}
             />
           </Form.Group>
           
-          {/* Field Token: Diisi otomatis jika ada di URL */}
+          {/* Field OTP (Menggantikan Token) */}
           <Form.Group className="mb-3">
-            <Form.Label>Reset Token</Form.Label>
+            <Form.Label>One-Time Password (OTP)</Form.Label>
             <Form.Control
               type="text"
-              placeholder="Paste the reset token here"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
+              placeholder="Enter the 6-digit OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
               required
-              readOnly={!!token} // Non-aktifkan jika sudah diisi dari URL
-              className={token ? 'bg-light' : ''}
+              maxLength={6}
             />
             <Form.Text className="text-muted">
-              Token expires in 1 hour.
+              OTP is valid for 10 minutes. Check your email.
             </Form.Text>
           </Form.Group>
 

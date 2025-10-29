@@ -7,9 +7,21 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const port = 5000;
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com', // Opsional, tapi disarankan
+    port: 465,              // Port aman untuk SSL/TLS
+    secure: true,           // Harus 'true' jika menggunakan port 465
+    auth: {
+        // Ganti dengan email pengirim Anda
+        user: 'GANTI DENGAN AKUN GOOGLE ANDA', 
+        // Ganti dengan Sandi Aplikasi 16 karakter dari Langkah 2
+        pass: 'GANTI DENGAN SANDI APLIKASI 16 DIGIT' 
+    }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -26,6 +38,9 @@ const db = mysql.createConnection({
 db.connect((err) => {
     if (err) {
         console.error('Error connecting to MySQL: ' + err.stack);
+        // Hentikan proses Node.js setelah error koneksi fatal
+        // Agar server tidak mencoba menjalankan query pada koneksi yang gagal
+        process.exit(1); 
         return;
     }
     console.log('Connected to MySQL as id ' + db.threadId);
@@ -126,7 +141,6 @@ app.post('/api/login', (req, res) => {
 app.post('/api/forgot-password', (req, res) => {
     const { email } = req.body; 
 
-    // Cari pengguna berdasarkan email
     const sql = 'SELECT id, email FROM users WHERE email = ?';
     db.query(sql, [email], (err, results) => { 
         if (err) {
@@ -134,54 +148,87 @@ app.post('/api/forgot-password', (req, res) => {
             return res.status(500).json({ msg: 'Server error' });
         }
 
+        // Always send the same message to prevent email enumeration
         if (results.length === 0) {
-            return res.json({ msg: 'A password reset link has been sent to your email address (if it exists).' });
+            // Log for server-side
+            console.log(`Attempted OTP for non-existent email: ${email}`);
+            return res.json({ msg: 'If the email exists, an OTP has been sent to your address.' });
         }
 
         const user = results[0];
-        
-        // Buat dan Simpan Token
-        const token = crypto.randomBytes(20).toString('hex');
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expires = new Date();
-        expires.setHours(expires.getHours() + 1); // Token kedaluwarsa dalam 1 jam
+        expires.setMinutes(expires.getMinutes() + 10); 
 
+        // Using existing 'reset_password_token' and 'reset_password_expires' columns
         const updateSql = 'UPDATE users SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?';
-        db.query(updateSql, [token, expires, user.id], (err, updateResult) => {
+        db.query(updateSql, [otp, expires, user.id], async (err, updateResult) => { // <-- ADDED 'async' here
             if (err) {
-                console.error('Error saving reset token:', err);
-                return res.status(500).json({ msg: 'Error saving reset token.' });
+                console.error('Error saving OTP token:', err);
+                return res.status(500).json({ msg: 'Error saving OTP token.' });
             }
             
-            // SIMULASI PENGIRIMAN EMAIL (Log ke console server)
-            const resetLink = `http://localhost:3000/reset-password?email=${user.email}&token=${token}`;
-            console.log(`\n======================================================`);
-            console.log(`[PASSWORD RESET SUCCESS] Token for user ${user.email}: ${token}`);
-            console.log(`[PASSWORD RESET SUCCESS] Full link (SIMULATION): ${resetLink}`);
-            console.log(`======================================================\n`);
+            // =======================================================
+            // REPLACE SIMULATION WITH ACTUAL EMAIL SENDING (Nodemailer)
+            // =======================================================
+            const mailOptions = {
+                from: '"Smart Savings App" <GANTI DENGAN AKUN GOOGLE ANDA>', // Sender email
+                to: user.email, // Recipient email
+                subject: 'Password Reset Verification Code (OTP)',
+                html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+                        <h2>Password Reset Request</h2>
+                        <p>Hi ${user.email},</p>
+                        <p>We received a request to reset your password.</p>
+                        <p>Your Verification Code (OTP) is:</p>
+                        <h1 style="color: #007bff; background-color: #f0f8ff; padding: 10px; border-radius: 5px; text-align: center; letter-spacing: 5px;">${otp}</h1>
+                        <p>This code is valid for only **10 minutes**.</p>
+                        <p>If you did not request a password reset, please ignore this email.</p>
+                        <p>Thank you,<br>SecureSave Team</p>
+                    </div>
+                `,
+            };
+
+            try {
+                await transporter.sendMail(mailOptions);
+                console.log(`[EMAIL SENT] OTP ${otp} successfully sent to ${user.email}`);
+            } catch (mailError) {
+                console.error('Error sending email:', mailError);
+                // Important: Even if email sending fails, we still send a success response to the user
+                // to prevent people from discovering which emails are registered.
+            }
             
-            res.json({ msg: 'A password reset link has been sent to your email address.' });
+            res.json({ 
+                msg: 'An OTP Code has been sent to your email. Please check your inbox (valid for 10 minutes).' 
+            });
         });
     });
 });
 
 app.post('/api/reset-password', async (req, res) => {
-    const { email, token, newPassword } = req.body;
+    // Parameter yang diperlukan: email, otp (sebagai ganti token), dan newPassword
+    const { email, otp, newPassword } = req.body; 
 
+    // 1. Cek User, OTP, dan Kadaluarsa
+    // Menggunakan reset_password_token untuk menyimpan OTP
     const sql = 'SELECT * FROM users WHERE email = ? AND reset_password_token = ? AND reset_password_expires > NOW()';
-    db.query(sql, [email, token], async (err, results) => {
+    // Gunakan 'otp' dari body permintaan untuk validasi
+    db.query(sql, [email, otp], async (err, results) => {
         if (err) return res.status(500).json({ msg: 'Server error' });
         if (results.length === 0) {
-            return res.status(400).json({ msg: 'Password reset token is invalid or has expired.' });
+            return res.status(400).json({ msg: 'Password reset OTP is invalid or has expired.' });
         }
 
         const user = results[0];
+        // 2. Hash Password Baru
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+        // 3. Update Password dan Hapus Token/OTP
         const updateSql = 'UPDATE users SET password = ?, reset_password_token = NULL, reset_password_expires = NULL WHERE id = ?';
         db.query(updateSql, [hashedPassword, user.id], (err, updateResult) => {
             if (err) return res.status(500).json({ msg: 'Error resetting password.' });
-            res.json({ msg: 'Password has been reset successfully.' });
+            res.json({ msg: 'Password has been reset successfully. You can now log in with your new password.' });
         });
     });
 });
@@ -1279,6 +1326,152 @@ app.get('/api/transactions/wallet/:walletId', auth, (req, res) => {
         });
 
         res.json(chartData);
+    });
+});
+
+app.delete('/api/admin/user/:id', auth, (req, res) => {
+    // 1. Admin check
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ msg: 'Access denied: Only admins can delete users.' });
+    }
+
+    const { id: userIdToDelete } = req.params;
+
+    // 2. Start Database Transaction
+    db.beginTransaction(err => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ msg: 'Server error: Failed to start transaction.' });
+        }
+
+        // --- Step 1: Delete Related Transactions ---
+        const deleteTransactionsSql = 'DELETE FROM transactions WHERE user_id = ?';
+        db.query(deleteTransactionsSql, [userIdToDelete], (err, result) => {
+            if (err) {
+                return db.rollback(() => res.status(500).json({ msg: 'Server error: Failed to delete user transactions.' }));
+            }
+
+            // --- Step 2: Delete Related Wallets ---
+            const deleteWalletsSql = 'DELETE FROM wallets WHERE user_id = ?';
+            db.query(deleteWalletsSql, [userIdToDelete], (err, result) => {
+                if (err) {
+                    return db.rollback(() => res.status(500).json({ msg: 'Server error: Failed to delete user wallets.' }));
+                }
+
+                // --- Step 3: Delete Primary User Account ---
+                const deleteUserSql = 'DELETE FROM users WHERE id = ?';
+                db.query(deleteUserSql, [userIdToDelete], (err, result) => {
+                    if (err) {
+                        return db.rollback(() => res.status(500).json({ msg: 'Server error: Failed to delete user account.' }));
+                    }
+                    if (result.affectedRows === 0) {
+                        return db.rollback(() => res.status(404).json({ msg: 'User not found.' }));
+                    }
+
+                    // --- Step 4: Commit Transaction ---
+                    db.commit(err => {
+                        if (err) {
+                            return db.rollback(() => res.status(500).json({ msg: 'Server error: Commit failed.' }));
+                        }
+                        res.json({ msg: 'User and all related data successfully deleted.' });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// @route   PUT api/admin/user/:id
+// @desc    Admin update user details (name, email)
+// @access  Private (Admin only)
+app.put('/api/admin/user/:id', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ msg: 'Access denied: Only admins can modify details.' });
+    }
+
+    const { id } = req.params;
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+        return res.status(400).json({ msg: 'Name and email are required.' });
+    }
+
+    // 1. Check if the new email is already in use by another user
+    const checkEmailSql = 'SELECT id FROM users WHERE email = ? AND id != ?';
+    db.query(checkEmailSql, [email, id], (err, results) => {
+        if (err) {
+            console.error('SQL Error during email check:', err);
+            return res.status(500).json({ msg: 'Server error checking email availability.' });
+        }
+        
+        if (results.length > 0) {
+            return res.status(400).json({ msg: 'Update failed: This email is already used by another user.' });
+        }
+
+        // 2. Perform the user details update
+        const updateSql = 'UPDATE users SET name = ?, email = ? WHERE id = ?';
+        db.query(updateSql, [name, email, id], (err, result) => {
+            if (err) {
+                console.error('SQL Error during details update:', err);
+                return res.status(500).json({ msg: 'Server error: Failed to update user details.' });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ msg: 'The user to be updated was not found.' });
+            }
+            
+            // 3. Send success response
+            res.json({ 
+                msg: 'User details updated successfully.', 
+                user: { id: id, name: name, email: email } 
+            });
+        });
+    });
+});
+
+// @route   PUT api/admin/user/:id
+// @desc    Admin update user details (name, email)
+// @access  Private (Admin only)
+app.put('/api/admin/user/:id', auth, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ msg: 'Access denied: Only admins can modify details.' });
+    }
+
+    const { id } = req.params;
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+        return res.status(400).json({ msg: 'Name and email are required.' });
+    }
+
+    // 1. Check if the new email is already in use by another user
+    const checkEmailSql = 'SELECT id FROM users WHERE email = ? AND id != ?';
+    db.query(checkEmailSql, [email, id], (err, results) => {
+        if (err) {
+            console.error('SQL Error during email check:', err);
+            return res.status(500).json({ msg: 'Server error checking email availability.' });
+        }
+        
+        if (results.length > 0) {
+            return res.status(400).json({ msg: 'Update failed: This email is already used by another user.' });
+        }
+
+        // 2. Perform the user details update
+        const updateSql = 'UPDATE users SET name = ?, email = ? WHERE id = ?';
+        db.query(updateSql, [name, email, id], (err, result) => {
+            if (err) {
+                console.error('SQL Error during details update:', err);
+                return res.status(500).json({ msg: 'Server error: Failed to update user details.' });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ msg: 'The user to be updated was not found.' });
+            }
+            
+            // 3. Send success response
+            res.json({ 
+                msg: 'User details updated successfully.', 
+                user: { id: id, name: name, email: email } 
+            });
+        });
     });
 });
 

@@ -1,30 +1,43 @@
+// file: ForgotPassword.js
+
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Form, Button, Card, Alert } from 'react-bootstrap';
 import { FaPiggyBank } from 'react-icons/fa';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // Import useNavigate
 
 const ForgotPassword = () => {
+  const navigate = useNavigate(); // Hook untuk navigasi
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  // State token ini hanya untuk simulasi di frontend agar token bisa dilihat
-  const [token, setToken] = useState(null); 
+  // Tambahkan state untuk mengontrol tampilan langkah
+  const [otpSent, setOtpSent] = useState(false); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage('');
+    setError('');
+
     try {
-      // Endpoint yang digunakan adalah yang sudah kita modifikasi di server.js
+      // Step 1: Request OTP
       const res = await axios.post('http://localhost:5000/api/forgot-password', { email });
+      
+      // Jika sukses, atur pesan dan pindah ke mode input OTP
       setMessage(res.data.msg);
-      // Asumsi server.js mengirimkan token untuk simulasi
-      setToken(res.data.token); 
-      setError('');
+      setOtpSent(true); 
+
     } catch (err) {
       setError(err.response?.data?.msg || 'Failed to send password reset request.');
       setMessage('');
-      setToken(null);
+      setOtpSent(false);
     }
+  };
+  
+  // Fungsi yang dijalankan setelah OTP dikirim
+  const handleProceedToReset = () => {
+      // Navigasi ke halaman ResetPassword, membawa email
+      navigate(`/reset-password?email=${email}`);
   };
 
   return (
@@ -32,19 +45,12 @@ const ForgotPassword = () => {
       <Card style={{ width: '25rem' }} className="p-4 shadow-lg">
         <div className="text-center mb-4">
           <FaPiggyBank size={50} className="text-primary mb-2" />
-          <h2>SecureSave</h2>
+          <h2>Smart Savings</h2>
         </div>
-        <h4 className="text-center mb-4">Forgot Password</h4>
+        <h4 className="text-center mb-4">Forgot Password (Step 1)</h4>
         
         {message && <Alert variant="success">{message}</Alert>}
         {error && <Alert variant="danger">{error}</Alert>}
-        
-        {/* Tampilan Token Simulasi */}
-        {token && (
-          <Alert variant="info">
-            <strong>Token Simulation:</strong> Copy this token for the next page: <strong>{token}</strong>
-          </Alert>
-        )}
         
         <Form onSubmit={handleSubmit}>
           <Form.Group className="mb-3">
@@ -55,11 +61,20 @@ const ForgotPassword = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={otpSent} // Non-aktifkan setelah OTP dikirim
             />
           </Form.Group>
-          <Button variant="primary" type="submit" className="w-100">
-            Send Reset Link
-          </Button>
+          
+          {!otpSent ? (
+            <Button variant="primary" type="submit" className="w-100">
+              Send OTP
+            </Button>
+          ) : (
+            <Button variant="success" onClick={handleProceedToReset} className="w-100">
+              Proceed to Reset Password
+            </Button>
+          )}
+
         </Form>
         
         <div className="text-center mt-3">
