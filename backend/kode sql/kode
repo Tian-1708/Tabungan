@@ -56,3 +56,10 @@ CREATE TABLE transactions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE SET NULL
 );
+
+INSERT INTO users (name, email, password, role) VALUES (
+    'Admin User',
+    'admin@gmail.com',
+    '$2a$10$n2c1n3K9E5M0z3K8O2w8U2Q0G0b5L5p4G8F3S1v7C5e9t5R3j2y6T', -- password: admin (di-hash menggunakan bcrypt)
+    'admin'
+);
